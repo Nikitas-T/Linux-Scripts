@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# ✅ Activate the virtual environment
+VENV_DIR="$HOME/venv"
+if [[ -f "$VENV_DIR/bin/activate" ]]; then
+    source "$VENV_DIR/bin/activate"
+    echo "🟢 Environment activated: $VENV_DIR"
+else
+    echo "❌ Environment not found at: $VENV_DIR"
+    return 1 2>/dev/null || exit 1
+fi
+
+# 📁 Directory for Jupyter
+NOTEBOOK_DIR="$HOME"
+LOG_FILE="/tmp/jupyter_log.txt"
+
+# 🧹 Clear the log
+rm -f "$LOG_FILE"
+
+# 🚀 Start Jupyter without browser, log to file
+jupyter notebook --notebook-dir="$NOTEBOOK_DIR" --no-browser > "$LOG_FILE" 2>&1 &
+JUPYTER_PID=$!
+
+echo "⏳ Waiting for Jupyter to start..."
+
+# ⌛ Wait for URL
+for i in {1..60}; do
+    URL=$(grep -oP 'http://(localhost|127\.0\.0\.1):\d+/tree\?token=\w+' "$LOG_FILE" | tail -n 1)
+    if [[ -n "$URL" ]]; then
+        echo "🔗 Link found: $URL"
+        break
+    fi
+    sleep 1
+done
+
+# ❌ If not found
+if [[ -z "$URL" ]]; then
+    echo "❌ Failed to find Jupyter URL. Check log: $LOG_FILE"
+    kill $JUPYTER_PID
+    deactivate 2>/dev/null
+    return 1 2>/dev/null || exit 1
+fi
+
+# 🌐 Open in browser
+echo "🚀 Opening Jupyter: $URL"
+if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$URL" &
+else
+    echo "⚠️ xdg-open not found, please open manually: $URL"
+fi
+
+# ⏳ Wait for user
+echo "⌛ Press [Enter] to stop Jupyter and exit the venv..."
+read -r
+
+# 🛑 Stop Jupyter
+echo "🛑 Shutting down Jupyter..."
+kill $JUPYTER_PID
+wait $JUPYTER_PID 2>/dev/null
+
+# 🔻 Deactivate environment
+deactivate
+echo "✅ All done. Environment deactivated."
+
+read -p "Press [Enter] to close the terminal window..."
